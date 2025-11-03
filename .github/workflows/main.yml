@@ -1,38 +1,56 @@
-name: React CI/CD
+name: Deploy React App to Oracle Linux VM
 
-# Trigger workflow on push or pull request to main
 on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
 
 jobs:
-  build:
-
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        node-version: ['18.x']  # You can add more Node versions if needed
+  deploy:
+    runs-on: self-hosted  # Runs directly on your VM (self-hosted runner)
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v5
+      # Step 1: Checkout repository
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'npm'
+      # Step 2: Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
 
-    - name: Install dependencies
-      run: npm ci
+      # Step 3: Check which user is running this workflow
+      - name: Check runner user
+        run: |
+          echo "Checking current user..."
+          whoami
+          echo "User check completed."
 
-    - name: Build React app
-      run: npm run build
+      # Step 4: Install dependencies
+      - name: Install dependencies
+        working-directory: ./react-app
+        run: npm install
 
-    - name: Run tests
-      run: npm test --if-present
+      # Step 5: Build project
+      - name: Build project
+        working-directory: ./react-app
+        run: npm run build
+
+      # Step 6: Deploy build to web directory
+      - name: Deploy build to web directory
+        run: |
+          echo "Deploying build to /var/www/html/react-app ..."
+          sudo mkdir -p /var/www/html/react-app
+          sudo cp -r ./react-app/build/* /var/www/html/react-app/
+          sudo chown -R nginx:nginx /var/www/html/react-app || true
+          echo "Deployment completed successfully."
+
+      # Step 7: Restart web service (httpd or nginx)
+      - name: Restart web service
+        run: |
+          echo "Restarting web service..."
+          sudo systemctl restart httpd || sudo systemctl restart nginx
+          sudo systemctl status httpd --no-pager || sudo systemctl status nginx --no-pager
+          echo "Web service restart completed."
+
